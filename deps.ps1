@@ -8,12 +8,6 @@ if (!(Verify-Elevated)) {
    exit
 }
 
-
-### Update Help for Modules
-Write-Host "Updating Help..." -ForegroundColor "Yellow"
-Update-Help -Force
-
-
 ### Package Providers
 Write-Host "Installing Package Providers..." -ForegroundColor "Yellow"
 Get-PackageProvider NuGet -Force | Out-Null
@@ -36,22 +30,6 @@ if ((which cinst) -eq $null) {
     choco feature enable -n=allowGlobalConfirmation
 }
 
-# system and cli
-choco install curl                --limit-output
-choco install nuget.commandline   --limit-output
-choco install webpi               --limit-output
-choco install git.install         --limit-output -params '"/GitAndUnixToolsOnPath /NoShellIntegration"'
-choco install nvm.portable        --limit-output
-
-# browsers
-choco install GoogleChrome        --limit-output
-choco install Firefox             --limit-output
-
-# dev tools and frameworks
-choco install visualstudiocode    --limit-output
-choco install Fiddler4            --limit-output
-choco install winmerge            --limit-output
-
 Refresh-Environment
 
 nvm on
@@ -63,13 +41,27 @@ Remove-Variable nodeLtsVersion
 # Web Platform Installer for remaining Windows features
 webpicmd /Install /AcceptEula /Products:"Python279"
 
-### Node Packages
-Write-Host "Installing Node Packages..." -ForegroundColor "Yellow"
-if (which npm) {
-    npm update npm
-    npm install -g gulp
-    npm install -g mocha
-    npm install -g node-inspector
-    npm install -g yo
-    npm install -g nodemon
+# Reload the $env object from the registry
+function Refresh-Environment {
+    $locations = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment',
+                 'HKCU:\Environment'
+
+    $locations | ForEach-Object {
+        $k = Get-Item $_
+        $k.GetValueNames() | ForEach-Object {
+            $name  = $_
+            $value = $k.GetValue($_)
+            Set-Item -Path Env:\$name -Value $value
+        }
+    }
+
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+}
+
+# Set a permanent Environment variable, and reload it into $env
+function Set-Environment([String] $variable, [String] $value) {
+    Set-ItemProperty "HKCU:\Environment" $variable $value
+    # Manually setting Registry entry. SetEnvironmentVariable is too slow because of blocking HWND_BROADCAST
+    #[System.Environment]::SetEnvironmentVariable("$variable", "$value","User")
+    Invoke-Expression "`$env:${variable} = `"$value`""
 }
